@@ -1,0 +1,19 @@
+pre_tag = "dummy"			        /* Pre-tag to be attached to AWS resources for identification */
+post_tag = "Terra"			        /* Post-tag to be attached to AWS resources for identification */
+tag_service = "ELK"		    /* Specify the service */
+tag_environment = "Staging"		    /* Specify the environment */
+tag_version = "1.0"			    /* Specify the version */
+aws_region  = "ap-northeast-1"  	/* ap-northeast-1 for Tokyo, ap-southeast-1 for SG */
+vpc_id = "dummy"                    /* ID of VPC created for hosting DC/OS */
+key_pair_name = "dummy"             /* key_pair_name should be exactly as it is in your AWS */
+internet_gateway_id = "dummy"
+vpc_cidr = "10.0.0.0/16"
+
+
+public_primary_subnet_cidr = "10.0.1.0/24"
+public_secondary_subnet_cidr = "10.0.2.0/24"
+private_primary_subnet_cidr = "10.0.3.0/24"
+private_secondary_subnet_cidr = "10.0.4.0/24"
+
+elastic_instance_type = "m3.large.elasticsearch"
+
