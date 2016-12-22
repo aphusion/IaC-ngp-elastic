@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  TagName:
+    Type: String
+    Description: Provide a Tag name to identify the Infrastructure
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the ECS instances.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Select a VPC that allows instances access to the Internet.
+  PrivateSubnetIDs:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at two private subnets in your selected VPC.
+  PublicSubnetIDs:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at two public subnets in your selected VPC.
+  LogstashInstanceType:
+    Description: Select Logstash server EC2 instance type.
+    Type: String
+    Default: m4.2xlarge
+    AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
+          m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+          c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+          c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+          r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    ConstraintDescription: Please choose a valid instance type.
+  AsgDesiredCapacity:
+    Type: Number
+    Default: '1'
+    Description: Number of logstash server instances.
+  AsgMaxSize:
+    Type: Number
+    Default: '1'
+    Description: Maximum number of logstash server instances.
+  PrivateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Provide the private security group Id for logstash instance creation.
+  PublicSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Provide the public security group Id for elb creation.
+Mappings:
+  AWSRegionToAMI:
+    ap-southeast-1:
+      AMIID: ami-35ec4c56
+    ap-south-1:
+      AMIID: ami-d4a7d3bb
+    ap-northeast-1:
+      AMIID: ami-99a30ef8
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Network Configuration"
+        Parameters:
+          - VpcId
+          - PrivateSubnetIDs
+          - PublicSubnetIDs
+          - PrivateSecurityGroup
+          - PublicSecurityGroup
+      -
+        Label:
+          default: "Logstash server Configuration"
+        Parameters:
+          - LogstashInstanceType
+          - KeyName
+          - AsgDesiredCapacity
+          - AsgMaxSize
+Resources:
+  LogstashAutoscalingLC:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [AWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      SecurityGroups: [!Ref 'PrivateSecurityGroup']
+      InstanceType: !Ref 'LogstashInstanceType'
+      KeyName: !Ref 'KeyName'
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            VolumeSize: '50'
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #cloud-config
+          coreos:
+            units:
+              - name: |-
+                  elk-logstash.service
+                command: |-
+                  start
+                content: |
+                  [Unit]
+                  Description=Logstash
+                  After=docker.service
+                  Requires=docker.service
+                  [Service]
+                  TimeoutStartSec=0
+                  ExecStartPre=-/bin/sh -c "docker kill %p"
+                  ExecStartPre=-/bin/sh -c "docker rm -f %p 2> /dev/null"
+                  ExecStartPre=/bin/sh -c "docker pull microservicestoday/logstash:2.0.9"
+                  ExecStart=/bin/sh -c "docker run --rm --name %p --privileged -p 5044:5044 -e "ELASTICSEARCH_URI=!Ref 'ElasticsearchDomain::DomainEndpoint'" -e "ELASTICSEARCH_START=0" -e "KIBANA_START=0" microservicestoday/logstash:2.0.9"
+                  ExecStop=/bin/sh -c "docker stop %p"
+                  RestartSec=5
+                  Restart=always
+                  [X-Fleet]
+                  Global=true
+  LogstashAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref 'PrivateSubnetIDs'
+      LaunchConfigurationName: !Ref 'LogstashAutoscalingLC'
+      MinSize: '1'
+      MaxSize: !Ref 'AsgMaxSize'
+      DesiredCapacity: !Ref 'AsgDesiredCapacity'
+      LoadBalancerNames:
+        - !Ref 'LogstashLoadBalancer'
+  LogstashLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      Subnets: !Ref 'PublicSubnetIDs'
+      SecurityGroups: [!Ref 'PublicSecurityGroup']
+      Listeners:
+        - LoadBalancerPort: '80'
+          InstancePort: '5044'
+          Protocol: tcp
+      HealthCheck:
+        Target: 'TCP:22'
+        HealthyThreshold: '2'
+        UnhealthyThreshold: '2'
+        Interval: '30'
+        Timeout: '5'
