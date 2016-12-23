@@ -33,20 +33,40 @@ Parameters:
     Type: Number
     Default: '1'
     Description: Maximum number of logstash server instances.
-  PrivateSecurityGroup:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Provide the private security group Id for logstash instance creation.
   PublicSecurityGroup:
     Type: AWS::EC2::SecurityGroup::Id
     Description: Provide the public security group Id for elb creation.
+  ElasticSearchInstanceType:
+    Description: Select Elasticsearch server EC2 instance type.
+    Type: String
+    Default: m3.2xlarge
+    AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
+              m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+              c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+              c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+              r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    ConstraintDescription: Please choose a valid instance type.
+  KibanaInstanceType:
+    Description: Select Logstash server EC2 instance type.
+    Type: String
+    Default: m4.2xlarge
+    AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
+          m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+          c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+          c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+          r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    ConstraintDescription: Please choose a valid instance type.
 Mappings:
-  AWSRegionToAMI:
+  CoreOsAWSRegionToAMI:
     ap-southeast-1:
       AMIID: ami-35ec4c56
     ap-south-1:
       AMIID: ami-d4a7d3bb
     ap-northeast-1:
       AMIID: ami-99a30ef8
+  CentosOsAWSRegionToAMI:
+    ap-northeast-1:
+        AMIID: ami-eec1c380
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -57,7 +77,6 @@ Metadata:
           - VpcId
           - PrivateSubnetIDs
           - PublicSubnetIDs
-          - PrivateSecurityGroup
           - PublicSecurityGroup
       -
         Label:
@@ -67,12 +86,33 @@ Metadata:
           - KeyName
           - AsgDesiredCapacity
           - AsgMaxSize
+      -
+        Label:
+          default: "Elasticsearch server Configuration"
+        Parameters:
+          - ElasticSearchInstanceType
 Resources:
+  ElasticSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Elastic Security Group
+      VpcId: !Ref 'VpcId'
+      Tags:
+        - Key: Name
+          Value: !Ref 'TagName'
+  ElasticSecurityGroupinbound:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref 'ElasticSecurityGroup'
+      IpProtocol: -1
+      FromPort: '0'
+      ToPort: '0'
+      CidrIp: 0.0.0.0/0
   LogstashAutoscalingLC:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: !FindInMap [AWSRegionToAMI, !Ref 'AWS::Region', AMIID]
-      SecurityGroups: [!Ref 'PrivateSecurityGroup']
+      ImageId: !FindInMap [CoreOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      SecurityGroups: [!Ref 'ElasticSecurityGroup']
       InstanceType: !Ref 'LogstashInstanceType'
       KeyName: !Ref 'KeyName'
       BlockDeviceMappings:
@@ -130,3 +170,50 @@ Resources:
         UnhealthyThreshold: '2'
         Interval: '30'
         Timeout: '5'
+  ElasticSearchInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Select [ 0, !Ref PrivateSubnetIDs ]
+      ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      KeyName: !Ref 'KeyName'
+      InstanceType: !Ref 'ElasticSearchInstanceType'
+      SecurityGroups: [!Ref 'ElasticSecurityGroup']
+      Tags:
+        - Key: Name
+          Value: !Ref 'TagName'
+      BlockDeviceMappings:
+      -
+        DeviceName: /dev/xvda
+        Ebs:
+          VolumeSize: 8
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash"
+            - sudo rpm -i https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/rpm/elasticsearch/2.3.3/elasticsearch-2.3.3.rpm
+            - sudo chkconfig --add elasticsearch
+            - cd /usr/share/elasticsearch/
+            - sudo bin/plugin install cloud-aws
+            - sudo service elasticsearch start
+  KibanaInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Select [ 0, !Ref PrivateSubnetIDs ]
+      ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      SecurityGroups: [!Ref 'ElasticSecurityGroup']
+      InstanceType: !Ref 'KibanaInstanceType'
+      KeyName: !Ref 'KeyName'
+      Tags:
+        - Key: Name
+          Value: !Ref 'TagName'
+      UserData:
+       Fn::Base64:
+         Fn::Join:
+         - "\n"
+         - - "#!/bin/bash"
+           - curl -O  https://artifacts.elastic.co/downloads/kibana/kibana-5.1.1-linux-x86_64.tar.gz
+           - tar -xzf kibana-5.1.1-linux-x86_64.tar.gz
+           - cd / && cd kibana-5.0.2-linux-x86_64
+           - ./bin/kibana
+
