@@ -67,6 +67,9 @@ Mappings:
   CentosOsAWSRegionToAMI:
     ap-northeast-1:
         AMIID: ami-eec1c380
+  LinuxAWSRegionToAMI:
+      ap-northeast-1:
+          AMIID: ami-9f0c67f8
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -174,7 +177,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       SubnetId: !Select [ 0, !Ref PrivateSubnetIDs ]
-      ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      ImageId: !FindInMap [LinuxAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
       KeyName: !Ref 'KeyName'
       InstanceType: !Ref 'ElasticSearchInstanceType'
       SecurityGroupIds: [!Ref 'ElasticSecurityGroup']
