@@ -248,7 +248,7 @@ Resources:
   KibanaALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: elasticsearch
+      Name: kibana
       Scheme: internal
       SecurityGroups: [!Ref 'ElasticALBSecurityGroup']
       Subnets: !Ref 'PublicSubnetIDs'
