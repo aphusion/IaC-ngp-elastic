@@ -143,7 +143,7 @@ Resources:
     Properties:
       HealthCheckIntervalSeconds: 60
       UnhealthyThresholdCount: 2
-      HealthCheckPort: 22
+      HealthCheckPort: 9600
       HealthCheckPath: /
       Name: logstash
       Port: 5044
@@ -169,12 +169,13 @@ Resources:
             - yum install java-1.8.0 -y
             - rpm -i https://artifacts.elastic.co/downloads/logstash/logstash-5.1.1.rpm
             - systemctl enable logstash
-            - curl -o /etc/logstash/conf.d/logstash.conf https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/logstash-template/config/logstash.conf
+            - curl -o /etc/logstash/conf.d/logstash.conf https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/neethu/logstash-template/config/logstash.conf
             - Fn::Join:
               - ""
               - - sed -i 's/elasticsearch_ip/
                 - Fn::GetAtt: [ElasticsearchALB, DNSName]
                 - /g' /etc/logstash/conf.d/logstash.conf
+            - "sed -i 's/# http.host:.*/http.host: 0.0.0.0/g' /etc/logstash/logstash.yml"
             - systemctl start logstash
   LogstashAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -184,8 +185,8 @@ Resources:
       MinSize: '1'
       MaxSize: !Ref 'AsgMaxSize'
       DesiredCapacity: !Ref 'AsgDesiredCapacity'
-      LoadBalancerNames:
-        - !Ref 'LogstashALB'
+      TargetGroupARNs:
+        - !Ref 'LogstashALBTargetGroup'
   ElasticsearchALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -249,7 +250,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: kibana
-      Scheme: internal
+      Scheme: Internet-facing
       SecurityGroups: [!Ref 'ElasticALBSecurityGroup']
       Subnets: !Ref 'PublicSubnetIDs'
       Tags:
@@ -271,7 +272,7 @@ Resources:
     Properties:
       HealthCheckIntervalSeconds: 60
       UnhealthyThresholdCount: 10
-      HealthCheckPath: /_cluster/health
+      HealthCheckPath: /
       Name: kibana
       Port: 5601
       Protocol: HTTP
