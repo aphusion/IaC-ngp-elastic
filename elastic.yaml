@@ -33,9 +33,6 @@ Parameters:
     Type: Number
     Default: '1'
     Description: Maximum number of logstash server instances.
-  PublicSecurityGroup:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Provide the public security group Id for elb creation.
   ElasticSearchInstanceType:
     Description: Select Elasticsearch server EC2 instance type.
     Type: String
@@ -80,7 +77,6 @@ Metadata:
           - VpcId
           - PrivateSubnetIDs
           - PublicSubnetIDs
-          - PublicSecurityGroup
       -
         Label:
           default: "Logstash server Configuration"
@@ -95,59 +91,91 @@ Metadata:
         Parameters:
           - ElasticSearchInstanceType
 Resources:
-  ElasticSecurityGroup:
+  ElasticInstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Elastic Security Group
+      GroupDescription: Elastic Instance Security Group
       VpcId: !Ref 'VpcId'
+      SecurityGroupIngress:
+      - IpProtocol: -1
+        FromPort: '0'
+        ToPort: '0'
+        CidrIp: 0.0.0.0/0
       Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-elastic-instance']]
+  ElasticALBSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Elastic Instance Security Group
+        VpcId: !Ref 'VpcId'
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        Tags:
         - Key: Name
-          Value: !Ref 'TagName'
-  ElasticSecurityGroupinbound:
-    Type: AWS::EC2::SecurityGroupIngress
+          Value: !Join ['', [!Ref 'TagName', '-elastic-ALB']]
+  LogstashALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      GroupId: !Ref 'ElasticSecurityGroup'
-      IpProtocol: -1
-      FromPort: '0'
-      ToPort: '0'
-      CidrIp: 0.0.0.0/0
+      Name: logstash
+      Scheme: internal
+      SecurityGroups: [!Ref 'ElasticALBSecurityGroup']
+      Subnets: !Ref 'PublicSubnetIDs'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-logstash']]
+  LogstashALBListener:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: LogstashALBTargetGroup
+      LoadBalancerArn:
+        Ref: LogstashALB
+      Port: 80
+      Protocol: HTTP
+  LogstashALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 2
+      HealthCheckPort: 22
+      HealthCheckPath: /
+      Name: logstash
+      Port: 5044
+      Protocol: HTTP
+      VpcId: !Ref 'VpcId'
   LogstashAutoscalingLC:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: !FindInMap [CoreOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
-      SecurityGroups: [!Ref 'ElasticSecurityGroup']
+      ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      SecurityGroups: [!Ref 'ElasticInstanceSecurityGroup']
       InstanceType: !Ref 'LogstashInstanceType'
       KeyName: !Ref 'KeyName'
       BlockDeviceMappings:
-        - DeviceName: "/dev/sda1"
-          Ebs:
-            VolumeSize: '50'
-            DeleteOnTermination: true
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeSize: '50'
+          DeleteOnTermination: true
       UserData:
-        Fn::Base64: !Sub |
-          #cloud-config
-          coreos:
-            units:
-              - name: |-
-                  elk-logstash.service
-                command: |-
-                  start
-                content: |
-                  [Unit]
-                  Description=Logstash
-                  After=docker.service
-                  Requires=docker.service
-                  [Service]
-                  TimeoutStartSec=0
-                  ExecStartPre=-/bin/sh -c "docker kill %p"
-                  ExecStartPre=-/bin/sh -c "docker rm -f %p 2> /dev/null"
-                  ExecStartPre=/bin/sh -c "docker pull microservicestoday/logstash:2.0.9"
-                  ExecStart=/bin/sh -c "docker run --rm --name %p --privileged -p 5044:5044 -e "ELASTICSEARCH_URI=!Ref 'ElasticsearchDomain::DomainEndpoint'" -e "ELASTICSEARCH_START=0" -e "KIBANA_START=0" microservicestoday/logstash:2.0.9"
-                  ExecStop=/bin/sh -c "docker stop %p"
-                  RestartSec=5
-                  Restart=always
-                  [X-Fleet]
-                  Global=true
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash"
+            - yum install java-1.8.0 -y
+            - rpm -i https://artifacts.elastic.co/downloads/logstash/logstash-5.1.1.rpm
+            - systemctl enable logstash
+            - curl -o /etc/logstash/conf.d/logstash.conf https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/logstash-template/config/logstash.conf
+            - Fn::Join:
+              - ""
+              - - sed -i 's/elasticsearch_ip/
+                - Fn::GetAtt: [ElasticsearchALB, DNSName]
+                - /g' /etc/logstash/conf.d/logstash.conf
+            - systemctl start logstash
   LogstashAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -157,33 +185,49 @@ Resources:
       MaxSize: !Ref 'AsgMaxSize'
       DesiredCapacity: !Ref 'AsgDesiredCapacity'
       LoadBalancerNames:
-        - !Ref 'LogstashLoadBalancer'
-  LogstashLoadBalancer:
-    Type: AWS::ElasticLoadBalancing::LoadBalancer
+        - !Ref 'LogstashALB'
+  ElasticsearchALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
+      Name: elasticsearch
+      Scheme: internal
+      SecurityGroups: [!Ref 'ElasticALBSecurityGroup']
       Subnets: !Ref 'PublicSubnetIDs'
-      SecurityGroups: [!Ref 'PublicSecurityGroup']
-      Listeners:
-        - LoadBalancerPort: '80'
-          InstancePort: '5044'
-          Protocol: tcp
-      HealthCheck:
-        Target: 'TCP:22'
-        HealthyThreshold: '2'
-        UnhealthyThreshold: '2'
-        Interval: '30'
-        Timeout: '5'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
+  ElasticsearchALBListener:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: ElasticsearchALBTargetGroup
+      LoadBalancerArn:
+        Ref: ElasticsearchALB
+      Port: 80
+      Protocol: HTTP
+  ElasticsearchALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /_cluster/health
+      Name: elasticsearch
+      Port: 9200
+      Protocol: HTTP
+      VpcId: !Ref 'VpcId'
   ElasticSearchInstance:
     Type: AWS::EC2::Instance
     Properties:
       SubnetId: !Select [ 0, !Ref PrivateSubnetIDs ]
-      ImageId: !FindInMap [LinuxAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
       KeyName: !Ref 'KeyName'
       InstanceType: !Ref 'ElasticSearchInstanceType'
-      SecurityGroupIds: [!Ref 'ElasticSecurityGroup']
+      SecurityGroupIds: [!Ref 'ElasticInstanceSecurityGroup']
       Tags:
-        - Key: Name
-          Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
       BlockDeviceMappings:
       -
         DeviceName: /dev/xvda
@@ -196,28 +240,64 @@ Resources:
           - - "#!/bin/bash"
             - yum install java-1.8.0 -y
             - rpm -i https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.1.1.rpm
-            - chkconfig --add elasticsearch
+            - systemctl enable elasticsearch
             - cd /usr/share/elasticsearch/
             - bin/elasticsearch-plugin install discovery-ec2 --batch
-            - sed -i 's/#network.host:.*/network.host: 0.0.0.0/g' /etc/elasticsearch/elasticsearch.yml
+            - "sed -i 's/#network.host:.*/network.host: 0.0.0.0/g' /etc/elasticsearch/elasticsearch.yml"
             - service elasticsearch start
+  KibanaALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: elasticsearch
+      Scheme: internal
+      SecurityGroups: [!Ref 'ElasticALBSecurityGroup']
+      Subnets: !Ref 'PublicSubnetIDs'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-kibana']]
+  KibanaALBListener:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: KibanaALBTargetGroup
+      LoadBalancerArn:
+        Ref: KibanaALB
+      Port: 80
+      Protocol: HTTP
+  KibanaALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /_cluster/health
+      Name: kibana
+      Port: 5601
+      Protocol: HTTP
+      VpcId: !Ref 'VpcId'
   KibanaInstance:
     Type: AWS::EC2::Instance
     Properties:
       SubnetId: !Select [ 0, !Ref PrivateSubnetIDs ]
       ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
-      SecurityGroupIds: [!Ref 'ElasticSecurityGroup']
+      SecurityGroupIds: [!Ref 'ElasticInstanceSecurityGroup']
       InstanceType: !Ref 'KibanaInstanceType'
       KeyName: !Ref 'KeyName'
       Tags:
-        - Key: Name
-          Value: !Join ['', [!Ref 'TagName', '-kibana']]
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-kibana']]
       UserData:
-       Fn::Base64:
-         Fn::Join:
-         - "\n"
-         - - "#!/bin/bash"
-           - curl -O  https://artifacts.elastic.co/downloads/kibana/kibana-5.1.1-linux-x86_64.tar.gz
-           - tar -xzf kibana-5.1.1-linux-x86_64.tar.gz
-           - cd / && cd kibana-5.0.2-linux-x86_64
-           - ./bin/kibana
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash"
+            - rpm -i https://artifacts.elastic.co/downloads/kibana/kibana-5.1.1-x86_64.rpm
+            - systemctl enable kibana
+            - "sed -i 's/#server.host:.*/server.host: 0.0.0.0/g' /etc/kibana/kibana.yml"
+            - Fn::Join:
+              - ""
+              - - "sed -i 's/#elasticsearch.url:.*/elasticsearch.url: http:\\/\\/"
+                - Fn::GetAtt: [ElasticsearchALB, DNSName]
+                - ":80/g' /etc/kibana/kibana.yml"
+            - service kibana start
