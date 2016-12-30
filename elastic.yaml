@@ -1,0 +1,418 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  AWSAccessKey:
+    Type: String
+    Description: Provide your AWS Access Key
+  AWSSecretKey:
+    Type: String
+    Description: Provide your Secret Access Key
+  TagName:
+    Type: String
+    Description: Provide a Tag name to identify the Infrastructure
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the ECS instances.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Select a VPC that allows instances access to the Internet.
+  PrivateSubnetIDs:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at least two private subnets in your selected VPC.
+  PublicSubnetIDs:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at least two public subnets in your selected VPC.
+  LogstashInstanceType:
+    Description: Select Logstash server EC2 instance type.
+    Type: String
+    Default: m4.2xlarge
+    AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
+          m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+          c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+          c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+          r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    ConstraintDescription: Please choose a valid instance type.
+  AsgDesiredCapacity:
+    Type: Number
+    Default: '1'
+    Description: Number of logstash server instances.
+  AsgMaxSize:
+    Type: Number
+    Default: '1'
+    Description: Maximum number of logstash server instances.
+  ElasticSearchInstanceType:
+    Description: Select Elasticsearch server EC2 instance type.
+    Type: String
+    Default: m3.2xlarge
+    AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
+              m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+              c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+              c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+              r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    ConstraintDescription: Please choose a valid instance type.
+  KibanaInstanceType:
+    Description: Select Logstash server EC2 instance type.
+    Type: String
+    Default: m4.2xlarge
+    AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
+          m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+          c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+          c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+          r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    ConstraintDescription: Please choose a valid instance type.
+  DomainName:
+    Description: Name of your domain.
+    Type: String
+  HostedZoneId:
+    Description: Provide the HostedZone ID for creating Route53 record. 
+    Type: String
+Mappings:
+  CentosOsAWSRegionToAMI:
+    ap-northeast-1:
+        AMIID: ami-eec1c380
+    ap-southeast-1:
+        AMIID: ami-f068a193
+    ap-south-1:
+        AMIID: ami-95cda6fa
+    us-east-1:
+        AMIID: ami-6d1c2007
+    us-east-2:
+        AMIID: ami-6a2d760f
+    us-west-1:
+        AMIID: ami-af4333cf
+    us-west-2:
+        AMIID: ami-d2c924b2
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Network Configuration"
+        Parameters:
+          - VpcId
+          - PrivateSubnetIDs
+          - PublicSubnetIDs
+      -
+        Label:
+          default: "Logstash server Configuration"
+        Parameters:
+          - LogstashInstanceType
+          - KeyName
+          - AsgDesiredCapacity
+          - AsgMaxSize
+      -
+        Label:
+          default: "Elasticsearch server Configuration"
+        Parameters:
+          - ElasticSearchInstanceType
+Resources:
+  ELKInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ELK Instance Security Group
+      VpcId: !Ref 'VpcId'
+      SecurityGroupIngress:
+      - IpProtocol: -1
+        FromPort: '0'
+        ToPort: '0'
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-ELK-instance']]
+  ELKALBSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: ELK ALB Security Group
+        VpcId: !Ref 'VpcId'
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref 'TagName', '-ELK-ALB']]
+  ElasticsearchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+  ElasticsearchRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Join ['', [!Ref 'TagName', '-elasticsearch-policy']]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: ec2:*
+          Resource: "*"
+      Roles: [!Ref 'ElasticsearchRole']
+  ElasticSearchInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles: [!Ref 'ElasticsearchRole']
+  ElasticSearchAutoscalingLC:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      SecurityGroups: [!Ref 'ELKInstanceSecurityGroup']
+      InstanceType: !Ref 'ElasticSearchInstanceType'
+      IamInstanceProfile: !Ref 'ElasticSearchInstanceProfile'
+      KeyName: !Ref 'KeyName'
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeSize: 256
+          DeleteOnTermination: true
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash"
+            - yum install java-1.8.0 -y
+            - rpm -i https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.1.1.rpm
+            - systemctl enable elasticsearch
+            - cd /usr/share/elasticsearch/
+            - bin/elasticsearch-plugin install discovery-ec2 --batch
+            - curl -o /etc/elasticsearch/elasticsearch.yml https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/elastic/config/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/AWS_ACCESS_KEY/
+                - !Ref 'AWSAccessKey'
+                - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/AWS_SECRET_KEY/
+                - !Ref 'AWSSecretKey'
+                - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/REGION/
+                - !Ref 'AWS::Region'
+                - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/CLUSTER_NAME/
+                - !Ref 'TagName'
+                - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/EC2_TAG_NAME/
+                - !Join ['', [!Ref 'TagName', '-elasticsearch']]
+                - /g' /etc/elasticsearch/elasticsearch.yml
+            - systemctl start elasticsearch
+  ElasticSearchAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref 'PrivateSubnetIDs'
+      LaunchConfigurationName: !Ref 'ElasticSearchAutoscalingLC'
+      MinSize: '1'
+      MaxSize: !Ref 'AsgMaxSize'
+      DesiredCapacity: !Ref 'AsgDesiredCapacity'
+      TargetGroupARNs:
+        - !Ref 'ElasticsearchALBTargetGroup'
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
+          PropagateAtLaunch: true
+  ElasticsearchALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /_cluster/health
+      Name: elasticsearch
+      Port: 9200
+      Protocol: HTTP
+      VpcId: !Ref 'VpcId'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
+  ElasticsearchALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: elasticsearch
+      Scheme: internal
+      SecurityGroups: [!Ref 'ELKALBSecurityGroup']
+      Subnets: !Ref 'PublicSubnetIDs'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
+  ElasticsearchALBListener:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: ElasticsearchALBTargetGroup
+      LoadBalancerArn:
+        Ref: ElasticsearchALB
+      Port: 80
+      Protocol: HTTP
+  LogstashAutoscalingLC:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      SecurityGroups: [!Ref 'ELKInstanceSecurityGroup']
+      InstanceType: !Ref 'LogstashInstanceType'
+      KeyName: !Ref 'KeyName'
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeSize: 256
+          DeleteOnTermination: true
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash"
+            - yum install java-1.8.0 -y
+            - rpm -i https://artifacts.elastic.co/downloads/logstash/logstash-5.1.1.rpm
+            - systemctl enable logstash
+            - curl -o /etc/logstash/conf.d/logstash.conf https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/logstash-template/config/logstash.conf
+            - Fn::Join:
+              - ""
+              - - sed -i 's/elasticsearch_ip/
+                - Fn::GetAtt: [ElasticsearchALB, DNSName]
+                - /g' /etc/logstash/conf.d/logstash.conf
+            - "sed -i 's/# http.host:.*/http.host: 0.0.0.0/g' /etc/logstash/logstash.yml"
+            - systemctl start logstash
+  LogstashAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref 'PrivateSubnetIDs'
+      LaunchConfigurationName: !Ref 'LogstashAutoscalingLC'
+      MinSize: '1'
+      MaxSize: !Ref 'AsgMaxSize'
+      DesiredCapacity: !Ref 'AsgDesiredCapacity'
+      TargetGroupARNs:
+        - !Ref 'LogstashALBTargetGroup'
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref 'TagName', '-logstash']]
+          PropagateAtLaunch: true
+  LogstashALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 2
+      HealthCheckPort: 9600
+      HealthCheckPath: /
+      Name: logstash
+      Port: 5044
+      Protocol: HTTP
+      VpcId: !Ref 'VpcId'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-logstash']]
+  LogstashALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: logstash
+      Scheme: internal
+      SecurityGroups: [!Ref 'ELKALBSecurityGroup']
+      Subnets: !Ref 'PublicSubnetIDs'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-logstash']]
+  LogstashALBListener:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: LogstashALBTargetGroup
+      LoadBalancerArn:
+        Ref: LogstashALB
+      Port: 80
+      Protocol: HTTP
+  LogstashRoute53Record:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref 'HostedZoneId'
+      Comment: Zone apex alias targeted to LogstashALB LoadBalancer.
+      Name: !Join ['', [!Ref 'TagName', '-logstash', '.', !Ref 'DomainName']]
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt LogstashALB.CanonicalHostedZoneID
+        DNSName: !GetAtt LogstashALB.DNSName
+  KibanaInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Select [ 0, !Ref PrivateSubnetIDs ]
+      ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      SecurityGroupIds: [!Ref 'ELKInstanceSecurityGroup']
+      InstanceType: !Ref 'KibanaInstanceType'
+      KeyName: !Ref 'KeyName'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-kibana']]
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash"
+            - rpm -i https://artifacts.elastic.co/downloads/kibana/kibana-5.1.1-x86_64.rpm
+            - systemctl enable kibana
+            - "sed -i 's/#server.host:.*/server.host: 0.0.0.0/g' /etc/kibana/kibana.yml"
+            - Fn::Join:
+              - ""
+              - - "sed -i 's/#elasticsearch.url:.*/elasticsearch.url: http:\\/\\/"
+                - Fn::GetAtt: [ElasticsearchALB, DNSName]
+                - ":80/g' /etc/kibana/kibana.yml"
+            - systemctl start kibana 
+  KibanaALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /
+      Name: kibana
+      Port: 5601
+      Protocol: HTTP
+      VpcId: !Ref 'VpcId'
+      Targets:
+      - Id: !Ref 'KibanaInstance'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-kibana']]
+  KibanaALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: kibana
+      Scheme: internet-facing
+      SecurityGroups: [!Ref 'ELKALBSecurityGroup']
+      Subnets: !Ref 'PublicSubnetIDs'
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref 'TagName', '-kibana']]
+  KibanaALBListener:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: KibanaALBTargetGroup
+      LoadBalancerArn:
+        Ref: KibanaALB
+      Port: 80
+      Protocol: HTTP
+  KibanaRoute53Record:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref 'HostedZoneId'
+      Comment: Zone apex alias targeted to KibanaALB LoadBalancer.
+      Name: !Join ['', [!Ref 'TagName', '-kibana', '.', !Ref 'DomainName']]
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt KibanaALB.CanonicalHostedZoneID
+        DNSName: !GetAtt KibanaALB.DNSName
