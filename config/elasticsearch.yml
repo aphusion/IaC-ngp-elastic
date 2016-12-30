@@ -12,13 +12,8 @@
 #
 # ---------------------------------- AWS ---------------------------------------
 #
-# Use AWS credentials for authentication:
 #
 cloud:
-  aws:
-    access_key: AWS_ACCESS_KEY
-    secret_key: AWS_SECRET_KEY
-    region: REGION
   node.auto_attributes: true
 #
 # ---------------------------------- Cluster -----------------------------------
