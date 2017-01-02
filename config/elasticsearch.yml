@@ -15,11 +15,7 @@
 # Use AWS credentials for authentication:
 #
 cloud:
-  aws:
-    access_key: AWS_ACCESS_KEY
-    secret_key: AWS_SECRET_KEY
-    region: REGION
-  node.auto_attributes: true
+  aws.region: REGION
 #
 # ---------------------------------- Cluster -----------------------------------
 #
@@ -103,3 +99,5 @@ discovery:
 # Require explicit names when deleting indices:
 #
 #action.destructive_requires_name: true
+
+bootstrap.memory_lock: true

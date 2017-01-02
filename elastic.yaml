@@ -1,11 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  AWSAccessKey:
-    Type: String
-    Description: Provide your AWS Access Key
-  AWSSecretKey:
-    Type: String
-    Description: Provide your Secret Access Key
   TagName:
     Type: String
     Description: Provide a Tag name to identify the Infrastructure
@@ -39,11 +33,11 @@ Parameters:
     Description: Select Elasticsearch server EC2 instance type.
     Type: String
     Default: m3.2xlarge
-    AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
-              m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
-              c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
-              c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
-              r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    AllowedValues: [t2.small, t2.medium, t2.large, m3.medium, m3.large,
+          m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+          c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+          c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+          r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
     ConstraintDescription: Please choose a valid instance type.
   ElasticsearchInstanceCount:
     Type: Number
@@ -53,11 +47,11 @@ Parameters:
     Description: Select Elasticsearch dedicated master EC2 instance type.
     Type: String
     Default: m3.2xlarge
-    AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
-              m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
-              c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
-              c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
-              r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    AllowedValues: [t2.small, t2.medium, t2.large, m3.medium, m3.large,
+          m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+          c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+          c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+          r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
     ConstraintDescription: Please choose a valid instance type.
   ElasticsearchMasterInstanceCount:
     Type: Number
@@ -95,8 +89,74 @@ Mappings:
         AMIID: ami-af4333cf
     us-west-2:
         AMIID: ami-d2c924b2
-  ElasticsearchConfFile: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/vysakh/dedicated-master/config/elasticsearch.yml
-  LogstashConfFile: https://github.com/microservices-today/IaC-ngp-elastic/blob/vysakh/dedicated-master/config/logstash.conf
+  Constants:
+    ElasticsearchConfFile:
+      URL: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/vysakh/dedicated-master/config/elasticsearch.yml
+    LogstashConfFile:
+      URL: https://github.com/microservices-today/IaC-ngp-elastic/blob/vysakh/dedicated-master/config/logstash.conf
+  AWSInstanceType2ElasticHeap:
+    t2.small:
+      HEAP: 1g
+    t2.medium:
+      HEAP: 2g
+    t2.large:
+      HEAP: 4g
+    m3.medium:
+      HEAP: 1g
+    m3.large:
+      HEAP: 3g
+    m3.xlarge:
+      HEAP: 7g
+    m3.2xlarge:
+       HEAP: 15g
+    m4.large:
+      HEAP: 4g
+    m4.xlarge:
+      HEAP: 8g
+    m4.2xlarge:
+       HEAP: 16g
+    m4.4xlarge:
+      HEAP: 31g
+    m4.10xlarge:
+      HEAP: 31g
+    c4.large:
+      HEAP: 1g
+    c4.xlarge:
+       HEAP: 3g
+    c4.2xlarge:
+       HEAP: 7g
+    c4.4xlarge:
+       HEAP: 15g
+    c4.8xlarge:
+       HEAP: 30g
+    c3.large:
+      HEAP: 1g
+    c3.xlarge:
+      HEAP: 3g
+    c3.2xlarge:
+       HEAP: 7g
+    c3.4xlarge:
+      HEAP: 15g
+    c3.8xlarge:
+       HEAP: 30g
+    r3.large:
+      HEAP: 7g
+    r3.xlarge:
+      HEAP: 15g
+    r3.2xlarge:
+       HEAP: 30g
+    r3.4xlarge:
+      HEAP: 31g
+    r3.8xlarge:
+       HEAP: 31g
+    i2.xlarge:
+      HEAP: 15g
+    i2.2xlarge:
+       HEAP: 30g
+    i2.4xlarge:
+      HEAP: 31g
+    i2.8xlarge:
+      HEAP: 31g
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -210,17 +270,7 @@ Resources:
               - ""
               - - curl -o /etc/elasticsearch/elasticsearch.yml
                 - ' '
-                - !Ref 'ElasticsearchConfFile'
-            - Fn::Join:
-              - ""
-              - - sed -i 's/AWS_ACCESS_KEY/
-                - !Ref 'AWSAccessKey'
-                - /g' /etc/elasticsearch/elasticsearch.yml
-            - Fn::Join:
-              - ""
-              - - sed -i 's/AWS_SECRET_KEY/
-                - !Ref 'AWSSecretKey'
-                - /g' /etc/elasticsearch/elasticsearch.yml
+                - !FindInMap [Constants, 'ElasticsearchConfFile', URL]
             - Fn::Join:
               - ""
               - - sed -i 's/REGION/
@@ -236,6 +286,19 @@ Resources:
               - - sed -i 's/EC2_TAG_NAME/
                 - !Join ['', [!Ref 'TagName', '-elasticsearch']]
                 - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/-Xms2g/-Xms
+                - !FindInMap [AWSInstanceType2ElasticHeap, !Ref 'ElasticSearchInstanceType', HEAP]
+                - /g' /etc/elasticsearch/jvm.options
+            - Fn::Join:
+              - ""
+              - - sed -i 's/-Xmx2g/-Xmx
+                - !FindInMap [AWSInstanceType2ElasticHeap, !Ref 'ElasticSearchInstanceType', HEAP]
+                - /g' /etc/elasticsearch/jvm.options
+            - "sed -i 's/#LimitMEMLOCK=infinity/LimitMEMLOCK=infinity/g' /usr/lib/systemd/system/elasticsearch.service"
+            - systemctl daemon-reload
+            - "sed -i 's/#MAX_LOCKED_MEMORY=unlimited/MAX_LOCKED_MEMORY=unlimited/g' /etc/sysconfig/elasticsearch"
             - systemctl start elasticsearch
   ElasticSearchAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -278,17 +341,7 @@ Resources:
               - ""
               - - curl -o /etc/elasticsearch/elasticsearch.yml
                 - ' '
-                - !Ref 'ElasticsearchConfFile'
-            - Fn::Join:
-              - ""
-              - - sed -i 's/AWS_ACCESS_KEY/
-                - !Ref 'AWSAccessKey'
-                - /g' /etc/elasticsearch/elasticsearch.yml
-            - Fn::Join:
-              - ""
-              - - sed -i 's/AWS_SECRET_KEY/
-                - !Ref 'AWSSecretKey'
-                - /g' /etc/elasticsearch/elasticsearch.yml
+                - !FindInMap [Constants, 'ElasticsearchConfFile', URL]
             - Fn::Join:
               - ""
               - - sed -i 's/REGION/
@@ -302,8 +355,23 @@ Resources:
             - Fn::Join:
               - ""
               - - sed -i 's/EC2_TAG_NAME/
-                - !Join ['', [!Ref 'TagName', '-elasticsearch']]
+                - !Join ['', [!Ref 'TagName', '-elasticsearch-dedicated-master']]
                 - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/-Xms2g/-Xms
+                - !FindInMap [AWSInstanceType2ElasticHeap, !Ref 'ElasticSearchMasterInstanceType', HEAP]
+                - /g' /etc/elasticsearch/jvm.options
+            - Fn::Join:
+              - ""
+              - - sed -i 's/-Xmx2g/-Xmx
+                - !FindInMap [AWSInstanceType2ElasticHeap, !Ref 'ElasticSearchMasterInstanceType', HEAP]
+                - /g' /etc/elasticsearch/jvm.options
+            - "sed -i 's/#LimitMEMLOCK=infinity/LimitMEMLOCK=infinity/g' /usr/lib/systemd/system/elasticsearch.service"
+            - systemctl daemon-reload
+            - "sed -i 's/#MAX_LOCKED_MEMORY=unlimited/MAX_LOCKED_MEMORY=unlimited/g' /etc/sysconfig/elasticsearch"
+            - "echo 'node.master: true' >> /etc/elasticsearch/elasticsearch.yml"
+            - "echo 'node.data: false' >> /etc/elasticsearch/elasticsearch.yml"
             - systemctl start elasticsearch
   ElasticSearchMasterAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -317,7 +385,7 @@ Resources:
         - !Ref 'ElasticsearchALBTargetGroup'
       Tags:
         - Key: Name
-          Value: !Join ['', [!Ref 'TagName', '-elasticsearch-master']]
+          Value: !Join ['', [!Ref 'TagName', '-elasticsearch-dedicated-master']]
           PropagateAtLaunch: true
   ElasticsearchALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -377,7 +445,7 @@ Resources:
               - ""
               - - curl -o /etc/logstash/conf.d/logstash.conf
                 - ' '
-                - !Ref 'LogstashConfFile'
+                - !FindInMap [Constants, 'LogstashConfFile', URL]
             - Fn::Join:
               - ""
               - - sed -i 's/ELASTICSEARCH_URI/
