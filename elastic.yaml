@@ -93,7 +93,7 @@ Mappings:
     ElasticsearchConfFile:
       URL: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/vysakh/dedicated-master/config/elasticsearch.yml
     LogstashConfFile:
-      URL: https://github.com/microservices-today/IaC-ngp-elastic/blob/vysakh/dedicated-master/config/logstash.conf
+      URL: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/vysakh/dedicated-master/config/logstash.conf
   AWSInstanceType2ElasticHeap:
     t2.small:
       HEAP: 1g
@@ -355,7 +355,7 @@ Resources:
             - Fn::Join:
               - ""
               - - sed -i 's/EC2_TAG_NAME/
-                - !Join ['', [!Ref 'TagName', '-elasticsearch-dedicated-master']]
+                - !Join ['', [!Ref 'TagName', '-elasticsearch']]
                 - /g' /etc/elasticsearch/elasticsearch.yml
             - Fn::Join:
               - ""
@@ -385,7 +385,10 @@ Resources:
         - !Ref 'ElasticsearchALBTargetGroup'
       Tags:
         - Key: Name
-          Value: !Join ['', [!Ref 'TagName', '-elasticsearch-dedicated-master']]
+          Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
+          PropagateAtLaunch: true
+        - Key: dedicated-master
+          Value: true
           PropagateAtLaunch: true
   ElasticsearchALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
