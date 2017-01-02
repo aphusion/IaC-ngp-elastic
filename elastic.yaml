@@ -370,14 +370,14 @@ Resources:
             - "sed -i 's/#LimitMEMLOCK=infinity/LimitMEMLOCK=infinity/g' /usr/lib/systemd/system/elasticsearch.service"
             - systemctl daemon-reload
             - "sed -i 's/#MAX_LOCKED_MEMORY=unlimited/MAX_LOCKED_MEMORY=unlimited/g' /etc/sysconfig/elasticsearch"
-            - "echo 'node.master: true' >> /etc/elasticsearch/elasticsearch.yml"
-            - "echo 'node.data: false' >> /etc/elasticsearch/elasticsearch.yml"
+            - "printf '\nnode.master: true' >> /etc/elasticsearch/elasticsearch.yml"
+            - "printf '\nnode.data: false' >> /etc/elasticsearch/elasticsearch.yml"
             - systemctl start elasticsearch
   ElasticSearchMasterAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier: !Ref 'PrivateSubnetIDs'
-      LaunchConfigurationName: !Ref 'ElasticSearchAutoscalingLC'
+      LaunchConfigurationName: !Ref 'ElasticSearchMasterAutoscalingLC'
       MinSize: '1'
       MaxSize: !Ref 'ElasticsearchMasterInstanceCount'
       DesiredCapacity: !Ref 'ElasticsearchMasterInstanceCount'
