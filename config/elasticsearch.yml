@@ -15,11 +15,7 @@
 # Use AWS credentials for authentication:
 #
 cloud:
-  aws:
-    access_key: AWS_ACCESS_KEY
-    secret_key: AWS_SECRET_KEY
-    region: REGION
-  node.auto_attributes: true
+  aws.region: REGION
 #
 # ---------------------------------- Cluster -----------------------------------
 #
@@ -51,7 +47,7 @@ cluster.name: CLUSTER_NAME
 #
 # Lock the memory on startup:
 #
-#bootstrap.memory_lock: true
+bootstrap.memory_lock: true
 #
 # Make sure that the heap size is set to about half the memory available
 # on the system and that the owner of the process is allowed to use this
@@ -103,3 +99,4 @@ discovery:
 # Require explicit names when deleting indices:
 #
 #action.destructive_requires_name: true
+

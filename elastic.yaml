@@ -1,11 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  AWSAccessKey:
-    Type: String
-    Description: Provide your AWS Access Key
-  AWSSecretKey:
-    Type: String
-    Description: Provide your Secret Access Key
   TagName:
     Type: String
     Description: Provide a Tag name to identify the Infrastructure
@@ -31,26 +25,40 @@ Parameters:
           c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
           r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
     ConstraintDescription: Please choose a valid instance type.
-  AsgDesiredCapacity:
+  LogstashInstanceCount:
     Type: Number
     Default: '1'
-    Description: Number of logstash server instances.
-  AsgMaxSize:
-    Type: Number
-    Default: '1'
-    Description: Maximum number of logstash server instances.
+    Description: Chosse number of logstash server instances.
   ElasticSearchInstanceType:
     Description: Select Elasticsearch server EC2 instance type.
     Type: String
     Default: m3.2xlarge
-    AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
-              m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
-              c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
-              c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
-              r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    AllowedValues: [t2.small, t2.medium, t2.large, m3.medium, m3.large,
+          m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+          c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+          c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+          r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
     ConstraintDescription: Please choose a valid instance type.
+  ElasticsearchInstanceCount:
+    Type: Number
+    Default: '1'
+    Description: Choose number of data nodes for elasticsearch cluster.
+  ElasticSearchMasterInstanceType:
+    Description: Select Elasticsearch dedicated master EC2 instance type.
+    Type: String
+    Default: m3.2xlarge
+    AllowedValues: [t2.small, t2.medium, t2.large, m3.medium, m3.large,
+          m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
+          c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, c3.large, c3.xlarge,
+          c3.2xlarge, c3.4xlarge, c3.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge,
+          r3.8xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge]
+    ConstraintDescription: Please choose a valid instance type.
+  ElasticsearchMasterInstanceCount:
+    Type: Number
+    Default: '3'
+    Description: Choose number of dedicated master nodes for elasticsearch cluster.
   KibanaInstanceType:
-    Description: Select Logstash server EC2 instance type.
+    Description: Select Kibana server EC2 instance type.
     Type: String
     Default: m4.2xlarge
     AllowedValues: [t2.micro, t2.small, t2.medium, t2.large, m3.medium, m3.large,
@@ -81,6 +89,74 @@ Mappings:
         AMIID: ami-af4333cf
     us-west-2:
         AMIID: ami-d2c924b2
+  Constants:
+    ElasticsearchConfFile:
+      URL: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/config/elasticsearch.yml
+    LogstashConfFile:
+      URL: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/config/logstash.conf
+  AWSInstanceType2ElasticHeap:
+    t2.small:
+      HEAP: 1g
+    t2.medium:
+      HEAP: 2g
+    t2.large:
+      HEAP: 4g
+    m3.medium:
+      HEAP: 1g
+    m3.large:
+      HEAP: 3g
+    m3.xlarge:
+      HEAP: 7g
+    m3.2xlarge:
+       HEAP: 15g
+    m4.large:
+      HEAP: 4g
+    m4.xlarge:
+      HEAP: 8g
+    m4.2xlarge:
+       HEAP: 16g
+    m4.4xlarge:
+      HEAP: 31g
+    m4.10xlarge:
+      HEAP: 31g
+    c4.large:
+      HEAP: 1g
+    c4.xlarge:
+       HEAP: 3g
+    c4.2xlarge:
+       HEAP: 7g
+    c4.4xlarge:
+       HEAP: 15g
+    c4.8xlarge:
+       HEAP: 30g
+    c3.large:
+      HEAP: 1g
+    c3.xlarge:
+      HEAP: 3g
+    c3.2xlarge:
+       HEAP: 7g
+    c3.4xlarge:
+      HEAP: 15g
+    c3.8xlarge:
+       HEAP: 30g
+    r3.large:
+      HEAP: 7g
+    r3.xlarge:
+      HEAP: 15g
+    r3.2xlarge:
+       HEAP: 30g
+    r3.4xlarge:
+      HEAP: 31g
+    r3.8xlarge:
+       HEAP: 31g
+    i2.xlarge:
+      HEAP: 15g
+    i2.2xlarge:
+       HEAP: 30g
+    i2.4xlarge:
+      HEAP: 31g
+    i2.8xlarge:
+      HEAP: 31g
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -97,13 +173,20 @@ Metadata:
         Parameters:
           - LogstashInstanceType
           - KeyName
-          - AsgDesiredCapacity
-          - AsgMaxSize
+          - LogstashInstanceCount
       -
         Label:
           default: "Elasticsearch server Configuration"
         Parameters:
           - ElasticSearchInstanceType
+          - ElasticsearchInstanceCount
+          - ElasticSearchMasterInstanceType
+          - ElasticsearchMasterInstanceCount
+    ParameterLabels:
+      - ElasticSearchMasterInstanceType:
+          default: "Dedicated master instance type"
+      - ElasticsearchMasterInstanceCount:
+          default: "Dedicated master instance count"
 Resources:
   ELKInstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -186,14 +269,9 @@ Resources:
             - curl -o /etc/elasticsearch/elasticsearch.yml https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/config/elasticsearch.yml
             - Fn::Join:
               - ""
-              - - sed -i 's/AWS_ACCESS_KEY/
-                - !Ref 'AWSAccessKey'
-                - /g' /etc/elasticsearch/elasticsearch.yml
-            - Fn::Join:
-              - ""
-              - - sed -i 's/AWS_SECRET_KEY/
-                - !Ref 'AWSSecretKey'
-                - /g' /etc/elasticsearch/elasticsearch.yml
+              - - curl -o /etc/elasticsearch/elasticsearch.yml
+                - ' '
+                - !FindInMap [Constants, 'ElasticsearchConfFile', URL]
             - Fn::Join:
               - ""
               - - sed -i 's/REGION/
@@ -209,6 +287,19 @@ Resources:
               - - sed -i 's/EC2_TAG_NAME/
                 - !Join ['', [!Ref 'TagName', '-elasticsearch']]
                 - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/-Xms2g/-Xms
+                - !FindInMap [AWSInstanceType2ElasticHeap, !Ref 'ElasticSearchInstanceType', HEAP]
+                - /g' /etc/elasticsearch/jvm.options
+            - Fn::Join:
+              - ""
+              - - sed -i 's/-Xmx2g/-Xmx
+                - !FindInMap [AWSInstanceType2ElasticHeap, !Ref 'ElasticSearchInstanceType', HEAP]
+                - /g' /etc/elasticsearch/jvm.options
+            - "sed -i 's/#LimitMEMLOCK=infinity/LimitMEMLOCK=infinity/g' /usr/lib/systemd/system/elasticsearch.service"
+            - systemctl daemon-reload
+            - "sed -i 's/#MAX_LOCKED_MEMORY=unlimited/MAX_LOCKED_MEMORY=unlimited/g' /etc/sysconfig/elasticsearch"
             - systemctl start elasticsearch
   ElasticSearchAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -216,13 +307,89 @@ Resources:
       VPCZoneIdentifier: !Ref 'PrivateSubnetIDs'
       LaunchConfigurationName: !Ref 'ElasticSearchAutoscalingLC'
       MinSize: '1'
-      MaxSize: !Ref 'AsgMaxSize'
-      DesiredCapacity: !Ref 'AsgDesiredCapacity'
+      MaxSize: !Ref 'ElasticsearchInstanceCount'
+      DesiredCapacity: !Ref 'ElasticsearchInstanceCount'
       TargetGroupARNs:
         - !Ref 'ElasticsearchALBTargetGroup'
       Tags:
         - Key: Name
           Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
+          PropagateAtLaunch: true
+  ElasticSearchMasterAutoscalingLC:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [CentosOsAWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      SecurityGroups: [!Ref 'ELKInstanceSecurityGroup']
+      InstanceType: !Ref 'ElasticSearchMasterInstanceType'
+      IamInstanceProfile: !Ref 'ElasticSearchInstanceProfile'
+      KeyName: !Ref 'KeyName'
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeSize: 256
+          DeleteOnTermination: true
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash"
+            - yum install java-1.8.0 -y
+            - rpm -i https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.1.1.rpm
+            - systemctl enable elasticsearch
+            - cd /usr/share/elasticsearch/
+            - bin/elasticsearch-plugin install discovery-ec2 --batch
+            - Fn::Join:
+              - ""
+              - - curl -o /etc/elasticsearch/elasticsearch.yml
+                - ' '
+                - !FindInMap [Constants, 'ElasticsearchConfFile', URL]
+            - Fn::Join:
+              - ""
+              - - sed -i 's/REGION/
+                - !Ref 'AWS::Region'
+                - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/CLUSTER_NAME/
+                - !Ref 'TagName'
+                - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/EC2_TAG_NAME/
+                - !Join ['', [!Ref 'TagName', '-elasticsearch']]
+                - /g' /etc/elasticsearch/elasticsearch.yml
+            - Fn::Join:
+              - ""
+              - - sed -i 's/-Xms2g/-Xms
+                - !FindInMap [AWSInstanceType2ElasticHeap, !Ref 'ElasticSearchMasterInstanceType', HEAP]
+                - /g' /etc/elasticsearch/jvm.options
+            - Fn::Join:
+              - ""
+              - - sed -i 's/-Xmx2g/-Xmx
+                - !FindInMap [AWSInstanceType2ElasticHeap, !Ref 'ElasticSearchMasterInstanceType', HEAP]
+                - /g' /etc/elasticsearch/jvm.options
+            - "sed -i 's/#LimitMEMLOCK=infinity/LimitMEMLOCK=infinity/g' /usr/lib/systemd/system/elasticsearch.service"
+            - systemctl daemon-reload
+            - "sed -i 's/#MAX_LOCKED_MEMORY=unlimited/MAX_LOCKED_MEMORY=unlimited/g' /etc/sysconfig/elasticsearch"
+            - "printf '\nnode.master: true' >> /etc/elasticsearch/elasticsearch.yml"
+            - "printf '\nnode.data: false' >> /etc/elasticsearch/elasticsearch.yml"
+            - systemctl start elasticsearch
+  ElasticSearchMasterAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref 'PrivateSubnetIDs'
+      LaunchConfigurationName: !Ref 'ElasticSearchMasterAutoscalingLC'
+      MinSize: '1'
+      MaxSize: !Ref 'ElasticsearchMasterInstanceCount'
+      DesiredCapacity: !Ref 'ElasticsearchMasterInstanceCount'
+      TargetGroupARNs:
+        - !Ref 'ElasticsearchALBTargetGroup'
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
+          PropagateAtLaunch: true
+        - Key: dedicated-master
+          Value: true
           PropagateAtLaunch: true
   ElasticsearchALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -281,7 +448,12 @@ Resources:
             - curl -o /etc/logstash/conf.d/logstash.conf https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/config/logstash.conf
             - Fn::Join:
               - ""
-              - - sed -i 's/elasticsearch_ip/
+              - - curl -o /etc/logstash/conf.d/logstash.conf
+                - ' '
+                - !FindInMap [Constants, 'LogstashConfFile', URL]
+            - Fn::Join:
+              - ""
+              - - sed -i 's/ELASTICSEARCH_URI/
                 - Fn::GetAtt: [ElasticsearchALB, DNSName]
                 - /g' /etc/logstash/conf.d/logstash.conf
             - "sed -i 's/# http.host:.*/http.host: 0.0.0.0/g' /etc/logstash/logstash.yml"
@@ -292,8 +464,8 @@ Resources:
       VPCZoneIdentifier: !Ref 'PrivateSubnetIDs'
       LaunchConfigurationName: !Ref 'LogstashAutoscalingLC'
       MinSize: '1'
-      MaxSize: !Ref 'AsgMaxSize'
-      DesiredCapacity: !Ref 'AsgDesiredCapacity'
+      MaxSize: !Ref 'LogstashInstanceCount'
+      DesiredCapacity: !Ref 'LogstashInstanceCount'
       TargetGroupARNs:
         - !Ref 'LogstashALBTargetGroup'
       Tags:
@@ -340,7 +512,7 @@ Resources:
     Properties:
       HostedZoneId: !Ref 'HostedZoneId'
       Comment: Zone apex alias targeted to LogstashALB LoadBalancer.
-      Name: !Join ['', [!Ref 'TagName', '-logstash', '.', !Ref 'DomainName']]
+      Name: !Join ['', ['logstash-', !Ref 'TagName', '.', !Ref 'DomainName']]
       Type: A
       AliasTarget:
         HostedZoneId: !GetAtt LogstashALB.CanonicalHostedZoneID
@@ -411,7 +583,7 @@ Resources:
     Properties:
       HostedZoneId: !Ref 'HostedZoneId'
       Comment: Zone apex alias targeted to KibanaALB LoadBalancer.
-      Name: !Join ['', [!Ref 'TagName', '-kibana', '.', !Ref 'DomainName']]
+      Name: !Join ['', ['Kibana-', !Ref 'TagName', '.', !Ref 'DomainName']]
       Type: A
       AliasTarget:
         HostedZoneId: !GetAtt KibanaALB.CanonicalHostedZoneID
