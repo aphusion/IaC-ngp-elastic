@@ -91,9 +91,9 @@ Mappings:
         AMIID: ami-d2c924b2
   Constants:
     ElasticsearchConfFile:
-      URL: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/vysakh/dedicated-master/config/elasticsearch.yml
+      URL: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/config/elasticsearch.yml
     LogstashConfFile:
-      URL: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/vysakh/dedicated-master/config/logstash.conf
+      URL: https://raw.githubusercontent.com/microservices-today/IaC-ngp-elastic/master/config/logstash.conf
   AWSInstanceType2ElasticHeap:
     t2.small:
       HEAP: 1g
@@ -510,7 +510,7 @@ Resources:
     Properties:
       HostedZoneId: !Ref 'HostedZoneId'
       Comment: Zone apex alias targeted to LogstashALB LoadBalancer.
-      Name: !Join ['', [!Ref 'TagName', '-logstash', '.', !Ref 'DomainName']]
+      Name: !Join ['', ['logstash-', !Ref 'TagName', '.', !Ref 'DomainName']]
       Type: A
       AliasTarget:
         HostedZoneId: !GetAtt LogstashALB.CanonicalHostedZoneID
@@ -581,7 +581,7 @@ Resources:
     Properties:
       HostedZoneId: !Ref 'HostedZoneId'
       Comment: Zone apex alias targeted to KibanaALB LoadBalancer.
-      Name: !Join ['', [!Ref 'TagName', '-kibana', '.', !Ref 'DomainName']]
+      Name: !Join ['', ['Kibana-', !Ref 'TagName', '.', !Ref 'DomainName']]
       Type: A
       AliasTarget:
         HostedZoneId: !GetAtt KibanaALB.CanonicalHostedZoneID
