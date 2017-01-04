@@ -466,57 +466,42 @@ Resources:
       MinSize: '1'
       MaxSize: !Ref 'LogstashInstanceCount'
       DesiredCapacity: !Ref 'LogstashInstanceCount'
-      TargetGroupARNs:
-        - !Ref 'LogstashALBTargetGroup'
+      LoadBalancerNames:
+        - Ref: LogstashELB
       Tags:
         - Key: Name
           Value: !Join ['', [!Ref 'TagName', '-logstash']]
           PropagateAtLaunch: true
-  LogstashALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  LogstashELB:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
     Properties:
-      HealthCheckIntervalSeconds: 60
-      UnhealthyThresholdCount: 2
-      HealthCheckPort: 9600
-      HealthCheckPath: /
-      Name: logstash
-      Port: 5044
-      Protocol: HTTP
-      VpcId: !Ref 'VpcId'
-      Tags:
-      - Key: Name
-        Value: !Join ['', [!Ref 'TagName', '-logstash']]
-  LogstashALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: logstash
+      LoadBalancerName: logstash
       Scheme: internal
       SecurityGroups: [!Ref 'ELKALBSecurityGroup']
       Subnets: !Ref 'PublicSubnetIDs'
+      Listeners:
+      - LoadBalancerPort: '80'
+        InstancePort: '5044'
+        Protocol: TCP
+      HealthCheck:
+        Target: HTTP:9600/
+        HealthyThreshold: '3'
+        UnhealthyThreshold: '2'
+        Interval: '90'
+        Timeout: '60'
       Tags:
       - Key: Name
         Value: !Join ['', [!Ref 'TagName', '-logstash']]
-  LogstashALBListener:
-    Type : AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-      - Type: forward
-        TargetGroupArn:
-          Ref: LogstashALBTargetGroup
-      LoadBalancerArn:
-        Ref: LogstashALB
-      Port: 80
-      Protocol: HTTP
   LogstashRoute53Record:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref 'HostedZoneId'
-      Comment: Zone apex alias targeted to LogstashALB LoadBalancer.
+      Comment: Zone apex alias targeted to LogstashELB LoadBalancer.
       Name: !Join ['', ['logstash-', !Ref 'TagName', '.', !Ref 'DomainName']]
       Type: A
       AliasTarget:
-        HostedZoneId: !GetAtt LogstashALB.CanonicalHostedZoneID
-        DNSName: !GetAtt LogstashALB.DNSName
+        HostedZoneId: !GetAtt LogstashELB.CanonicalHostedZoneNameID
+        DNSName: !GetAtt LogstashELB.DNSName
   KibanaInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -588,3 +573,7 @@ Resources:
       AliasTarget:
         HostedZoneId: !GetAtt KibanaALB.CanonicalHostedZoneID
         DNSName: !GetAtt KibanaALB.DNSName
+Outputs:
+  KibanaALB:
+    Description: The DNSName of the kibana load balancer
+    Value: !GetAtt KibanaALB.DNSName
