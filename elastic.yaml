@@ -410,7 +410,7 @@ Resources:
       Name: elasticsearch
       Scheme: internal
       SecurityGroups: [!Ref 'ELKALBSecurityGroup']
-      Subnets: !Ref 'PublicSubnetIDs'
+      Subnets: !Ref 'PrivateSubnetIDs'
       Tags:
       - Key: Name
         Value: !Join ['', [!Ref 'TagName', '-elasticsearch']]
@@ -478,7 +478,7 @@ Resources:
       LoadBalancerName: logstash
       Scheme: internal
       SecurityGroups: [!Ref 'ELKALBSecurityGroup']
-      Subnets: !Ref 'PublicSubnetIDs'
+      Subnets: !Ref 'PrivateSubnetIDs'
       Listeners:
       - LoadBalancerPort: '80'
         InstancePort: '5044'
