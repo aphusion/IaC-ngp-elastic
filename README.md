@@ -1,4 +1,4 @@
-## IAC NGP ELASTIC - Elastic Etack module
+## NGP Elastic - Elastic Etack module
 
 ### Components
 1. Logstash 5.1.1
