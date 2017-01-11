@@ -9,7 +9,7 @@
 - AWS IAM Account.
 - Key Pair to access EC2 instances.
 - VPC with public and private subnets
-    - (Optional) Use IaC-NGP-AWS to create the infrastructure to set up ELastic Stack. This includes VPC, Public and Private Subnets in multiple availability zones.
+    - (Optional) Use [IaC-NGP-AWS](https://github.com/microservices-today/IaC-ngp-aws) to create the infrastructure to set up ELastic Stack. This includes VPC, Public and Private Subnets in multiple availability zones.
 - Hosted Zone in AWS Route53 for your Domain. This is required to create a record for creating a friendly dns name for Logstash and Kibana Loadbalancers.
 - "Accept Software Terms" of AWS Marketplace for CentOS if required.
 
